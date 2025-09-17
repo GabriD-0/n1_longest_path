@@ -17,7 +17,6 @@ class LongestPathResult:
     destino: int
     ordem_topologica: List[int]
     distancias: List[float] # melhor distância a partir de origem
-    predecessor: List[int] # predecessor na melhor rota
     predecessor: List[int] # predecessor em UMA melhor rota
     predecessores: List[List[int]] # todos os predecessores que empatam no melhor custo
     caminho_otimo: List[int] # um caminho_otimo origem->destino
