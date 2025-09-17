@@ -197,8 +197,9 @@ def main():
     if res.peso_total is None:
         print(f"\nNão existe caminho_otimo de {res.origem} até {res.destino}.")
     else:
-        print(f"\nSolução otima (um dos empates): {' '.join(map(str, res.caminho_otimo))}")
-        print(f"Peso total máximo: {res.peso_total}")
+        print(f"\nCaminho máximo: [{', '.join(map(str, res.caminho_otimo))}]")
+        print(f"Peso total: {int(res.peso_total) if float(res.peso_total).is_integer() else res.peso_total}")
+
         print("\nTodos os caminhos ótimos:")
 
         for p in res.caminhos_otimos:
