@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from math import inf
 import sys
 from typing import List, Tuple
+from functools import lru_cache
 
 """
 Empacotamento de campos para criação de um construtor automatico
@@ -17,7 +18,10 @@ class LongestPathResult:
     ordem_topologica: List[int]
     distancias: List[float] # melhor distância a partir de origem
     predecessor: List[int] # predecessor na melhor rota
-    caminho: List[int] # caminho origem->destino (vazio se não há)
+    predecessor: List[int] # predecessor em UMA melhor rota
+    predecessores: List[List[int]] # todos os predecessores que empatam no melhor custo
+    caminho_otimo: List[int] # um caminho_otimo origem->destino
+    caminhos_otimos: List[List[int]] # todos os caminhos ótimos (empates)
     peso_total: float | None # peso total origem->destino
 
 
@@ -79,33 +83,41 @@ def topological_order(num_vertices: int, matriz: List[List[int]]) -> List[int]:
                     fila.append(dest)
 
     if len(ordem_topologica) != num_vertices:
-        raise ValueError("O grafo tem ciclo; longest caminho em geral vira NP-difícil.")
+        raise ValueError("O grafo tem ciclo; longest caminho_otimo em geral vira NP-difícil.")
 
     return ordem_topologica
 
 
 """
-Função de calculo do caminho mais longo de origem até destino em um DAG.
+Função de calculo do caminho_otimo mais longo de origem até destino em um DAG.
 """
 def longest_path_dag(num_vertices: int, matriz: List[List[int]], origem: int, destino: int) -> LongestPathResult:
     ordem_topologica = topological_order(num_vertices, matriz)
 
     distancias = [-inf] * num_vertices
     predecessor = [-1] * num_vertices
+    predecessores: List[List[int]] = [[] for _ in range(num_vertices)]  # (empates)
     distancias[origem] = 0
 
     for orig in ordem_topologica:
         if distancias[orig] == -inf:
             continue
+
         for dest, peso in enumerate(matriz[orig]):
             if peso != 0:
                 cand = distancias[orig] + peso
                 if cand > distancias[dest]:
                     distancias[dest] = cand
                     predecessor[dest] = orig
+                    predecessores[dest] = [orig]
+                elif cand == distancias[dest]:
+                    predecessores[dest].append(orig)
+                    if predecessor[dest] == -1:
+                        predecessor[dest] = orig
 
-    # reconstrói origem->destino se existir
-    caminho: List[int] = []
+    # Reconstrói UM caminho_otimo pela cadeia 'predecessor'
+    caminho_otimo: List[int] = []
+    caminhos_otimos: List[List[int]] = []
     peso_total: float | None
 
     if distancias[destino] == -inf:
@@ -114,9 +126,24 @@ def longest_path_dag(num_vertices: int, matriz: List[List[int]], origem: int, de
         peso_total = distancias[destino]
         cur = destino
         while cur != -1:
-            caminho.append(cur)
+            caminho_otimo.append(cur)
             cur = predecessor[cur]
-        caminho.reverse()
+        caminho_otimo.reverse()
+
+        # todos os caminhos ótimos usando o grafo de predecessores (empates)
+        sys.setrecursionlimit(max(1000, num_vertices * 10))
+
+        @lru_cache(None)
+        def build(u: int) -> List[List[int]]:
+            if u == origem:
+                return [[origem]]
+            paths: List[List[int]] = []
+            for p in predecessores[u]:
+                for pp in build(p):
+                    paths.append(pp + [u])
+            return paths
+
+        caminhos_otimos = build(destino)
 
     return LongestPathResult(
         num_vertices=num_vertices,
@@ -126,14 +153,16 @@ def longest_path_dag(num_vertices: int, matriz: List[List[int]], origem: int, de
         ordem_topologica=ordem_topologica,
         distancias=distancias,
         predecessor=predecessor,
-        caminho=caminho,
+        predecessores=predecessores,
+        caminho_otimo=caminho_otimo,
+        caminhos_otimos=caminhos_otimos,
         peso_total=peso_total,
     )
 
 
 """
 Função orquestradora escolhe o arquivo de entrada,
-chama as funções de leitura e de cálculo do caminho mais longo,
+chama as funções de leitura e de cálculo do caminho_otimo mais longo,
 trata erros, e imprime um relatório completo e legível do resultado.
 """
 def main():
@@ -146,7 +175,7 @@ def main():
         print(f"Erro: {e}", file=sys.stderr)
         sys.exit(1)
 
-    print("=== Longest caminho em DAG (ordem topológica + DP) ===")
+    print("=== Longest caminho_otimo em DAG (ordem topológica + DP) ===")
     print(f"Arquivo: {filename}")
     print(f"Vértices: {res.num_vertices}")
     print("\nMatriz de adjacência (0 = sem aresta):")
@@ -163,15 +192,18 @@ def main():
     def fmt(x): return "-inf" if x == -inf else str(x)
 
     print(" ".join(fmt(x) for x in res.distancias))
-    print("\nPredecessores (predecessor):")
+    print("\nPredecessores:")
     print(" ".join(map(str, res.predecessor)))
 
     if res.peso_total is None:
-        print(f"\nNão existe caminho de {res.origem} até {res.destino}.")
+        print(f"\nNão existe caminho_otimo de {res.origem} até {res.destino}.")
     else:
-        print(f"\nCaminho s → t: {' '.join(map(str, res.caminho))}")
-        print(f"Peso total: {res.peso_total}")
+        print(f"\nSolução otima (um dos empates): {' '.join(map(str, res.caminho_otimo))}")
+        print(f"Peso total máximo: {res.peso_total}")
+        print("\nTodos os caminhos ótimos:")
 
+        for p in res.caminhos_otimos:
+            print(" -> ".join(map(str, p)))
 
 if __name__ == "__main__":
     main()
